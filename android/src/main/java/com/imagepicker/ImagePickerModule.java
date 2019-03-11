@@ -329,8 +329,11 @@ public class ImagePickerModule extends ReactContextBaseJavaModule
     if (pickVideo)
     {
       requestCode = REQUEST_LAUNCH_VIDEO_LIBRARY;
-      libraryIntent = new Intent(Intent.ACTION_PICK);
-      libraryIntent.setType("video/*");
+      libraryIntent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+      libraryIntent.addCategory(Intent.CATEGORY_OPENABLE);
+      libraryIntent.setType("image/*");
+      libraryIntent.putExtra(Intent.EXTRA_MIME_TYPES, new String[] {"image/*", "video/*"});
+
     }
     else
     {
@@ -411,6 +414,7 @@ public class ImagePickerModule extends ReactContextBaseJavaModule
       case REQUEST_LAUNCH_VIDEO_LIBRARY:
         responseHelper.putString("uri", data.getData().toString());
         responseHelper.putString("path", getRealPathFromURI(data.getData()));
+        updatedResultResponse(data.getData(),getRealPathFromURI(data.getData()));
         responseHelper.invokeResponse(callback);
         callback = null;
         return;
@@ -716,7 +720,7 @@ public class ImagePickerModule extends ReactContextBaseJavaModule
     }
     imageConfig = imageConfig.updateFromOptions(options);
     pickVideo = false;
-    if (options.hasKey("mediaType") && options.getString("mediaType").equals("video")) {
+    if (options.hasKey("mediaType") && (options.getString("mediaType").equals("video")|| options.getString("mediaType").equals("mixed"))) {
       pickVideo = true;
     }
     videoQuality = 1;
