@@ -3,6 +3,7 @@ package com.imagepicker;
 import android.Manifest;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
+import android.content.ContentResolver;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -50,6 +51,8 @@ import java.util.List;
 
 import com.facebook.react.modules.core.PermissionListener;
 import com.facebook.react.modules.core.PermissionAwareActivity;
+
+import okhttp3.internal.Util;
 
 import static com.imagepicker.utils.MediaUtils.*;
 import static com.imagepicker.utils.MediaUtils.createNewFile;
@@ -412,18 +415,26 @@ public class ImagePickerModule extends ReactContextBaseJavaModule
         break;
 
       case REQUEST_LAUNCH_VIDEO_LIBRARY:
-        responseHelper.putString("uri", data.getData().toString());
-        responseHelper.putString("path", getRealPathFromURI(data.getData()));
-        updatedResultResponse(data.getData(),getRealPathFromURI(data.getData()));
+        final String path = getRealPathFromURI(data.getData());
+        Uri uri1= Uri.fromFile(new File(path));
+
+        responseHelper.putString("uri", uri1.toString());
+        responseHelper.putString("path", path);
+
+        String mime = RealPathUtil.getFileMime(reactContext,data.getData());
+        responseHelper.putString("type", mime);
+
+        updatedResultResponse(uri1,path);
         responseHelper.invokeResponse(callback);
         callback = null;
         return;
 
       case REQUEST_LAUNCH_VIDEO_CAPTURE:
-        final String path = getRealPathFromURI(data.getData());
-        responseHelper.putString("uri", data.getData().toString());
-        responseHelper.putString("path", path);
-        fileScan(reactContext, path);
+        final String pathqw = getRealPathFromURI(data.getData());
+        Uri uriqw= Uri.fromFile(new File(pathqw));
+        responseHelper.putString("uri", uriqw.toString());
+        responseHelper.putString("path", pathqw);
+        fileScan(reactContext, pathqw);
         responseHelper.invokeResponse(callback);
         callback = null;
         return;
@@ -708,9 +719,11 @@ public class ImagePickerModule extends ReactContextBaseJavaModule
 
     // type
     String extension = MimeTypeMap.getFileExtensionFromUrl(path);
-    if (extension != null) {
+    if (!TextUtils.isEmpty(extension)) {
+      if(TextUtils.isEmpty(responseHelper.getResponse().getString("type")))
       responseHelper.putString("type", MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension));
     }
+
   }
 
   private void parseOptions(final ReadableMap options) {

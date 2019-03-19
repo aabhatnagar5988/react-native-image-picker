@@ -1,26 +1,27 @@
 package com.imagepicker.utils;
 
 import android.annotation.SuppressLint;
-import android.annotation.TargetApi;
+import android.content.ContentUris;
 import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Environment;
 import android.provider.DocumentsContract;
 import android.provider.MediaStore;
-import android.content.ContentUris;
-import android.os.Environment;
 import android.provider.OpenableColumns;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
-import android.support.v4.content.FileProvider;
 import android.util.Log;
+
+import com.imagepicker.FileProvider;
 
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+
 
 public class RealPathUtil {
 
@@ -146,7 +147,6 @@ public class RealPathUtil {
 	/**
 	 * Get the value of the data column for this Uri. This is useful for
 	 * MediaStore Uris, and other file-based ContentProviders.
-
 	 */
 
 	public static File getDocumentCacheDir(@NonNull Context context) {
@@ -160,7 +160,7 @@ public class RealPathUtil {
 	}
 
 	public static String getDataColumn(Context context, Uri uri, String selection,
-	                                   String[] selectionArgs) {
+									   String[] selectionArgs) {
 
 		Cursor cursor = null;
 		final String column = "_data";
@@ -221,7 +221,7 @@ public class RealPathUtil {
 	 * @return Whether the Uri authority is FileProvider
 	 */
 	public static boolean isFileProviderUri(@NonNull final Context context,
-	                                        @NonNull final Uri uri) {
+											@NonNull final Uri uri) {
 		final String packageName = context.getPackageName();
 		final String authority = new StringBuilder(packageName).append(".provider").toString();
 		return authority.equals(uri.getAuthority());
@@ -233,7 +233,7 @@ public class RealPathUtil {
 	 * @return File path or null if file is missing
 	 */
 	public static @Nullable String getFileProviderPath(@NonNull final Context context,
-	                                                   @NonNull final Uri uri)
+													   @NonNull final Uri uri)
 	{
 		final File appDir = context.getExternalFilesDir(Environment.DIRECTORY_PICTURES);
 		final File file = new File(appDir, uri.getLastPathSegment());
@@ -242,19 +242,52 @@ public class RealPathUtil {
 
 	public static String getFileName(@NonNull Context context, Uri uri) {
 		String filename = "";
+		String mime= "";
 		{
 			Cursor returnCursor = context.getContentResolver().query(uri, null,
 					null, null, null);
 			if (returnCursor != null) {
 				int nameIndex = returnCursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+				int mimeIndex = returnCursor.getColumnIndex("mime_type");
+
 				returnCursor.moveToFirst();
 				filename = returnCursor.getString(nameIndex);
+				mime = returnCursor.getString(mimeIndex);
+
 				returnCursor.close();
 			}
 		}
 
+		String arr[] = mime.split("/");
+		if(arr.length>0){
+			if(!filename.contains("."))
+			filename= filename+"."+arr[1];
+		}
 		return filename;
 	}
+
+	public static String getFileMime(@NonNull Context context, Uri uri) {
+
+		String mime= "";
+		{
+			Cursor returnCursor = context.getContentResolver().query(uri, null,
+					null, null, null);
+			if (returnCursor != null) {
+
+				int mimeIndex = returnCursor.getColumnIndex("mime_type");
+
+				returnCursor.moveToFirst();
+
+				mime = returnCursor.getString(mimeIndex);
+
+				returnCursor.close();
+			}
+		}
+
+
+		return mime;
+	}
+
 
 	private static void saveFileFromUri(Context context, Uri uri, String destinationPath) {
 		InputStream is = null;
@@ -322,3 +355,4 @@ public class RealPathUtil {
 
 
 }
+
