@@ -7,7 +7,7 @@
 
 @import MobileCoreServices;
 
-@interface ImagePickerManager ()
+@interface ImagePickerManager () <UIDocumentPickerDelegate>
 
 @property (nonatomic, strong) UIImagePickerController *picker;
 @property (nonatomic, strong) RCTResponseSenderBlock callback;
@@ -299,7 +299,11 @@ RCT_EXPORT_METHOD(showImagePicker:(NSDictionary *)options callback:(RCTResponseS
             if (imageURL) {
                 PHAsset *pickedAsset = [PHAsset fetchAssetsWithALAssetURLs:@[imageURL] options:nil].lastObject;
                 NSString *originalFilename = [self originalFilenameForAsset:pickedAsset assetType:PHAssetResourceTypePhoto];
-                self.response[@"fileName"] = originalFilename ?: [NSNull null];
+                if (originalFilename != nil && [originalFilename.pathExtension isEqualToString:@"HEIC"]) {
+                    self.response[@"fileName"] = [originalFilename stringByAppendingString:@".jpg"];
+                } else {
+                    self.response[@"fileName"] = originalFilename ?: [NSNull null];
+                }
                 if (pickedAsset.location) {
                     self.response[@"latitude"] = @(pickedAsset.location.coordinate.latitude);
                     self.response[@"longitude"] = @(pickedAsset.location.coordinate.longitude);
@@ -705,6 +709,102 @@ RCT_EXPORT_METHOD(showImagePicker:(NSDictionary *)options callback:(RCTResponseS
         ISO8601DateFormatter.dateFormat = @"yyyy-MM-dd'T'HH:mm:ssZZZZZ";
     });
     return ISO8601DateFormatter;
+}
+
+/// Code for PDF
+/// - Fuad
+
+RCT_EXPORT_METHOD(showPDFPicker:(NSDictionary *)options
+                  callback:(RCTResponseSenderBlock)callback) {
+
+    [self launchPDFPicker:options callback:callback];
+}
+
+RCT_EXPORT_METHOD(showFilePicker:(NSDictionary *)options
+                  callback:(RCTResponseSenderBlock)callback) {
+
+    [self showMediaSelector:options callback:callback];
+}
+
+- (void)showMediaSelector:(NSDictionary *)selector callback:(RCTResponseSenderBlock)callback {
+    UIAlertController *alertController = [UIAlertController alertControllerWithTitle:@"Upload a File" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+
+    UIAlertAction *cancelAction = [UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:^(UIAlertAction * action) {
+        self.callback(@[@{@"didCancel": @YES}]); // Return callback for 'cancel' action (if is required)
+    }];
+    [alertController addAction:cancelAction];
+
+    UIAlertAction *uploadPhotoAction = [UIAlertAction actionWithTitle:@"Upload Photo"
+                                                                style:UIAlertActionStyleDefault
+                                                              handler:^(UIAlertAction * action) {
+                                                                  self.callback = callback;
+                                                                  [self launchImagePicker:RNImagePickerTargetLibrarySingleImage options:selector];
+                                                              }
+                                        ];
+    [alertController addAction:uploadPhotoAction];
+
+
+    UIAlertAction *uploadFileAction = [UIAlertAction actionWithTitle:@"Upload File"
+                                                               style:UIAlertActionStyleDefault
+                                                             handler:^(UIAlertAction * action) {
+                                                                 [self launchPDFPicker:selector callback:callback];
+                                                             }
+                                       ];
+    [alertController addAction:uploadFileAction];
+
+    UIViewController *root = RCTPresentedViewController();
+
+    /* On iPad, UIAlertController presents a popover view rather than an action sheet like on iPhone. We must provide the location
+     of the location to show the popover in this case. For simplicity, we'll just display it on the bottom center of the screen
+     to mimic an action sheet */
+    alertController.popoverPresentationController.sourceView = root.view;
+    alertController.popoverPresentationController.sourceRect = CGRectMake(root.view.bounds.size.width / 2.0, root.view.bounds.size.height, 1.0, 1.0);
+
+    if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) {
+        alertController.popoverPresentationController.permittedArrowDirections = 0;
+        for (id subview in alertController.view.subviews) {
+            if ([subview isMemberOfClass:[UIView class]]) {
+                ((UIView *)subview).backgroundColor = [UIColor whiteColor];
+            }
+        }
+    }
+
+    [root presentViewController:alertController animated:YES completion:nil];
+}
+
+- (void)launchPDFPicker:(NSDictionary *)options callback:(RCTResponseSenderBlock)callback {
+
+    NSArray *allowedUTIs = @[(__bridge NSString*)kUTTypeCompositeContent];
+    UIDocumentPickerViewController *documentPicker = [[UIDocumentPickerViewController alloc] initWithDocumentTypes:(NSArray *)allowedUTIs inMode:UIDocumentPickerModeImport];
+
+    self.callback = callback;
+
+    documentPicker.delegate = self;
+    documentPicker.modalPresentationStyle = UIModalPresentationFormSheet;
+
+    UIViewController *rootViewController = [[[[UIApplication sharedApplication]delegate] window] rootViewController];
+    while (rootViewController.modalViewController) {
+        rootViewController = rootViewController.modalViewController;
+    }
+
+    [rootViewController presentViewController:documentPicker animated:YES completion:nil];
+}
+
+- (void)documentPickerWasCancelled:(UIDocumentPickerViewController *)controller {
+    NSLog(@"Document Picekr cancelled");
+    self.callback(@[@{@"didCancel": @YES}]);
+}
+
+- (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentAtURL:(NSURL *)url {
+    NSLog(@"Picked %@ - %@", url.lastPathComponent, url.absoluteString);
+    NSDictionary *response = @{
+                      @"fileName": url.lastPathComponent,
+                      @"uri": url.absoluteString,
+                      @"type": [@"application/" stringByAppendingString:url.pathExtension]
+                      };
+
+
+    self.callback(@[response]);
 }
 
 @end
