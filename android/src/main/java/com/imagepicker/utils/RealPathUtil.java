@@ -1,20 +1,27 @@
 package com.imagepicker.utils;
 
 import android.annotation.SuppressLint;
-import android.annotation.TargetApi;
+import android.content.ContentUris;
 import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Environment;
 import android.provider.DocumentsContract;
 import android.provider.MediaStore;
-import android.content.ContentUris;
-import android.os.Environment;
+import android.provider.OpenableColumns;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
-import android.support.v4.content.FileProvider;
+import android.util.Log;
 
+import com.imagepicker.FileProvider;
+
+import java.io.BufferedOutputStream;
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+
 
 public class RealPathUtil {
 
@@ -61,10 +68,38 @@ public class RealPathUtil {
 			else if (isDownloadsDocument(uri)) {
 
 				final String id = DocumentsContract.getDocumentId(uri);
-				final Uri contentUri = ContentUris.withAppendedId(
-						Uri.parse("content://downloads/public_downloads"), Long.valueOf(id));
+				if (id != null && id.startsWith("raw:")) {
+					return id.substring(4);
+				}
 
-				return getDataColumn(context, contentUri, null, null);
+				String[] contentUriPrefixesToTry = new String[]{
+						"content://downloads/public_downloads",
+						"content://downloads/my_downloads",
+						"content://downloads/all_downloads"
+				};
+
+				for (String contentUriPrefix : contentUriPrefixesToTry) {
+					Uri contentUri = ContentUris.withAppendedId(Uri.parse(contentUriPrefix), Long.valueOf(id));
+					try {
+						String path = getDataColumn(context, contentUri, null, null);
+						if (path != null) {
+							return path;
+						}
+					} catch (Exception e) {}
+				}
+
+				// path could not be retrieved using ContentResolver, therefore copy file to accessible cache using streams
+				String fileName = getFileName(context, uri);
+				File cacheDir = getDocumentCacheDir(context);
+				File file = generateFileName(fileName, cacheDir);
+				String destinationPath = null;
+				if (file != null) {
+					destinationPath = file.getAbsolutePath();
+					saveFileFromUri(context, uri, destinationPath);
+				}
+
+				return destinationPath;
+
 			}
 			// MediaProvider
 			else if (isMediaDocument(uri)) {
@@ -112,15 +147,20 @@ public class RealPathUtil {
 	/**
 	 * Get the value of the data column for this Uri. This is useful for
 	 * MediaStore Uris, and other file-based ContentProviders.
-	 *
-	 * @param context The context.
-	 * @param uri The Uri to query.
-	 * @param selection (Optional) Filter used in the query.
-	 * @param selectionArgs (Optional) Selection arguments used in the query.
-	 * @return The value of the _data column, which is typically a file path.
 	 */
+
+	public static File getDocumentCacheDir(@NonNull Context context) {
+		File dir = new File(context.getCacheDir(), "documents");
+		if (!dir.exists()) {
+			dir.mkdirs();
+		}
+
+
+		return dir;
+	}
+
 	public static String getDataColumn(Context context, Uri uri, String selection,
-	                                   String[] selectionArgs) {
+									   String[] selectionArgs) {
 
 		Cursor cursor = null;
 		final String column = "_data";
@@ -181,7 +221,7 @@ public class RealPathUtil {
 	 * @return Whether the Uri authority is FileProvider
 	 */
 	public static boolean isFileProviderUri(@NonNull final Context context,
-	                                        @NonNull final Uri uri) {
+											@NonNull final Uri uri) {
 		final String packageName = context.getPackageName();
 		final String authority = new StringBuilder(packageName).append(".provider").toString();
 		return authority.equals(uri.getAuthority());
@@ -193,10 +233,126 @@ public class RealPathUtil {
 	 * @return File path or null if file is missing
 	 */
 	public static @Nullable String getFileProviderPath(@NonNull final Context context,
-	                                                   @NonNull final Uri uri)
+													   @NonNull final Uri uri)
 	{
 		final File appDir = context.getExternalFilesDir(Environment.DIRECTORY_PICTURES);
 		final File file = new File(appDir, uri.getLastPathSegment());
 		return file.exists() ? file.toString(): null;
 	}
+
+	public static String getFileName(@NonNull Context context, Uri uri) {
+		String filename = "";
+		String mime= "";
+		{
+			Cursor returnCursor = context.getContentResolver().query(uri, null,
+					null, null, null);
+			if (returnCursor != null) {
+				int nameIndex = returnCursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+				int mimeIndex = returnCursor.getColumnIndex("mime_type");
+
+				returnCursor.moveToFirst();
+				filename = returnCursor.getString(nameIndex);
+				mime = returnCursor.getString(mimeIndex);
+
+				returnCursor.close();
+			}
+		}
+
+		String arr[] = mime.split("/");
+		if(arr.length>0){
+			if(!filename.contains("."))
+			filename= filename+"."+arr[1];
+		}
+		return filename;
+	}
+
+	public static String getFileMime(@NonNull Context context, Uri uri) {
+
+		String mime= "";
+		{
+			Cursor returnCursor = context.getContentResolver().query(uri, null,
+					null, null, null);
+			if (returnCursor != null) {
+
+				int mimeIndex = returnCursor.getColumnIndex("mime_type");
+
+				returnCursor.moveToFirst();
+
+				mime = returnCursor.getString(mimeIndex);
+
+				returnCursor.close();
+			}
+		}
+
+
+		return mime;
+	}
+
+
+	private static void saveFileFromUri(Context context, Uri uri, String destinationPath) {
+		InputStream is = null;
+		BufferedOutputStream bos = null;
+		try {
+			is = context.getContentResolver().openInputStream(uri);
+			bos = new BufferedOutputStream(new FileOutputStream(destinationPath, false));
+			byte[] buf = new byte[1024];
+			is.read(buf);
+			do {
+				bos.write(buf);
+			} while (is.read(buf) != -1);
+		} catch (IOException e) {
+			e.printStackTrace();
+		} finally {
+			try {
+				if (is != null) is.close();
+				if (bos != null) bos.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+	}
+
+
+	@Nullable
+	public static File generateFileName(@Nullable String name, File directory) {
+		if (name == null) {
+			return null;
+		}
+
+		File file = new File(directory, name);
+
+		if (file.exists()) {
+			String fileName = name;
+			String extension = "";
+			int dotIndex = name.lastIndexOf('.');
+			if (dotIndex > 0) {
+				fileName = name.substring(0, dotIndex);
+				extension = name.substring(dotIndex);
+			}
+
+			int index = 0;
+
+			while (file.exists()) {
+				index++;
+				name = fileName + '(' + index + ')' + extension;
+				file = new File(directory, name);
+			}
+		}
+
+		try {
+			if (!file.createNewFile()) {
+				return null;
+			}
+		} catch (IOException e) {
+			Log.w("", e);
+			return null;
+		}
+
+
+
+		return file;
+	}
+
+
 }
+
