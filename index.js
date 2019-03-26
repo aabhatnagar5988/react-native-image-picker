@@ -1,4 +1,4 @@
-import { NativeModules } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 
 const { ImagePickerManager } = NativeModules;
 
@@ -20,6 +20,22 @@ const DEFAULT_OPTIONS = {
 
 module.exports = {
   ...ImagePickerManager,
+  showMediaPicker: function showMediaPicker(options, callback) {
+    if (typeof options === 'function') {
+      callback = options;
+      options = {};
+    }
+    if (Platform.OS === 'ios') {
+      return ImagePickerManager.showFilePicker(
+        { ...DEFAULT_OPTIONS, ...options },
+        callback,
+      );
+    }
+    return ImagePickerManager.launchImageLibrary(
+      { ...DEFAULT_OPTIONS, ...options },
+      callback,
+    );
+  },
   showImagePicker: function showImagePicker(options, callback) {
     if (typeof options === 'function') {
       callback = options;

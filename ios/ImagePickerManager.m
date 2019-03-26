@@ -473,6 +473,8 @@ RCT_EXPORT_METHOD(showImagePicker:(NSDictionary *)options callback:(RCTResponseS
                 [self.response setObject:videoRefURL.absoluteString forKey:@"origURL"];
             }
 
+            self.response[@"type"] = [@"video/" stringByAppendingString:videoDestinationURL.pathExtension];
+
             NSDictionary *storageOptions = [self.options objectForKey:@"storageOptions"];
             if (storageOptions && [[storageOptions objectForKey:@"cameraRoll"] boolValue] == YES && self.picker.sourceType == UIImagePickerControllerSourceTypeCamera) {
                 ALAssetsLibrary *library = [[ALAssetsLibrary alloc] init];
@@ -722,8 +724,9 @@ RCT_EXPORT_METHOD(showPDFPicker:(NSDictionary *)options
 
 RCT_EXPORT_METHOD(showFilePicker:(NSDictionary *)options
                   callback:(RCTResponseSenderBlock)callback) {
-
-    [self showMediaSelector:options callback:callback];
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        [self showMediaSelector:options callback:callback];
+    });
 }
 
 - (void)showMediaSelector:(NSDictionary *)selector callback:(RCTResponseSenderBlock)callback {
