@@ -720,7 +720,8 @@ public class ImagePickerModule extends ReactContextBaseJavaModule
     // type
     String extension = MimeTypeMap.getFileExtensionFromUrl(path);
     if (!TextUtils.isEmpty(extension)) {
-      if(TextUtils.isEmpty(responseHelper.getResponse().getString("type")))
+
+      if(responseHelper.getResponse().hasKey("key") && TextUtils.isEmpty(responseHelper.getResponse().getString("type")))
       responseHelper.putString("type", MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension));
     }
 

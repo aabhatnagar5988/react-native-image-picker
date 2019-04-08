@@ -733,7 +733,7 @@ RCT_EXPORT_METHOD(showFilePicker:(NSDictionary *)options
     UIAlertController *alertController = [UIAlertController alertControllerWithTitle:@"Upload a File" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
 
     UIAlertAction *cancelAction = [UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:^(UIAlertAction * action) {
-        self.callback(@[@{@"didCancel": @YES}]); // Return callback for 'cancel' action (if is required)
+        callback(@[@{@"didCancel": @YES}]); // Return callback for 'cancel' action (if is required)
     }];
     [alertController addAction:cancelAction];
 
